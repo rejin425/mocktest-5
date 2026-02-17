@@ -7,10 +7,11 @@ app.secret_key = "secret123"
 
 # ---------- MYSQL CONNECTION ----------
 db = pymysql.connect(
-    host="localhost",
-    user="root",
-    password="Mock@123",
-    database="mocktest"
+    host=os.environ.get("DB_HOST"),
+    user=os.environ.get("DB_USER"),
+    password=os.environ.get("DB_PASSWORD"),
+    database=os.environ.get("DB_NAME")
+     port=25173
 )
 
 # ---------- HOME ----------
@@ -233,5 +234,6 @@ def logout():
 
 if __name__=="__main__":
     app.run(debug=True)
+
 
 
