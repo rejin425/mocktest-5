@@ -1,19 +1,19 @@
+from flask import Flask, render_template, request, redirect, session
+import os
 import pymysql
-import PyPDF2
-from flask import Flask, request, redirect, session
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = "mocktest_secret"
 
-# ---------- MYSQL CONNECTION ----------
 db = pymysql.connect(
     host=os.environ.get("DB_HOST"),
     user=os.environ.get("DB_USER"),
     password=os.environ.get("DB_PASSWORD"),
-    database=os.environ.get("DB_NAME")
-     port=25173
+    database=os.environ.get("DB_NAME"),
+    port=25173
 )
 
+cursor = db.cursor()
 # ---------- HOME ----------
 @app.route('/')
 def home():
@@ -234,6 +234,7 @@ def logout():
 
 if __name__=="__main__":
     app.run(debug=True)
+
 
 
 
