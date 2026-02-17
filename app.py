@@ -1,3 +1,4 @@
+import os
 import pymysql
 import PyPDF2
 from flask import Flask, request, redirect, session
@@ -233,6 +234,7 @@ def results():
 def logout():
     session.clear()
     return redirect('/')
+
 
 
 
