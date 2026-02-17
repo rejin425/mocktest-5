@@ -5,13 +5,15 @@ from flask import Flask, request, redirect, session
 app = Flask(__name__)
 app.secret_key = "secret123"
 # ---------- MYSQL CONNECTION ----------
+
 db = pymysql.connect(
     host=os.environ.get("DB_HOST"),
     user=os.environ.get("DB_USER"),
     password=os.environ.get("DB_PASSWORD"),
-    database=os.environ.get("DB_NAME")
-port=25173
+    database=os.environ.get("DB_NAME"),
+    port=25173
 )
+
 
 cursor = db.cursor()
 # ---------- HOME ----------
@@ -231,10 +233,9 @@ def results():
 def logout():
     session.clear()
     return redirect('/')
-import os
 
-port = int(os.environ.get("PORT", 10000))
-app.run(host="0.0.0.0", port=port)
+
+
 
 
 
