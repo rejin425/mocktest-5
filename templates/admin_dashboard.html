@@ -1,0 +1,19 @@
+<h2>Admin Dashboard</h2>
+<a href="/logout">Logout</a>
+<h3>All Users</h3>
+
+<table border="1">
+<tr>
+    <th>ID</th>
+    <th>Username</th>
+    <th>Role</th>
+</tr>
+
+{% for user in users %}
+<tr>
+    <td>{{ user[0] }}</td>
+    <td>{{ user[1] }}</td>
+    <td>{{ user[3] }}</td>
+</tr>
+{% endfor %}
+</table>

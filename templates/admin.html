@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+</head>
+<body>
+
+<h2>Admin Dashboard</h2>
+
+<p>Welcome, {{ session['username'] }}</p>
+
+<hr>
+
+<h3>Actions</h3>
+
+<ul>
+    <li><a href="/upload_pdf">Upload Question PDF</a></li>
+    <li><a href="/results">View Results</a></li>
+    <li><a href="/logout">Logout</a></li>
+</ul>
+
+</body>
+</html>

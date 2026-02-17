@@ -1,0 +1,15 @@
+<h2>Mock Test</h2>
+
+<form method="post" action="/submit_test">
+
+{% for q in questions %}
+    <p>{{ q[1] }}</p>
+    <input type="radio" name="{{ q[0] }}" value="A"> {{ q[2] }}<br>
+    <input type="radio" name="{{ q[0] }}" value="B"> {{ q[3] }}<br>
+    <input type="radio" name="{{ q[0] }}" value="C"> {{ q[4] }}<br>
+    <input type="radio" name="{{ q[0] }}" value="D"> {{ q[5] }}<br>
+    <hr>
+{% endfor %}
+
+<button type="submit">Submit Test</button>
+</form>
