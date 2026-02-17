@@ -2,3 +2,5 @@ Flask
 flask-mysqldb
 PyMySQL
 gunicorn
+PyPDF2
+
