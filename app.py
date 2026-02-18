@@ -1,215 +1,197 @@
+from flask import Flask, render_template, request, redirect, session, url_for
+import mysql.connector
 import os
-import pymysql
 import PyPDF2
-from flask import Flask, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
+app.secret_key = os.environ.get("SECRET_KEY", "fallback-secret")
 
-# ---------- MYSQL CONNECTION ----------
-db = pymysql.connect(
-    host=os.environ.get("DB_HOST"),
-    user=os.environ.get("DB_USER"),
-    password=os.environ.get("DB_PASSWORD"),
-    database=os.environ.get("DB_NAME"),
-    port=25173
-)
+# ---------------------------
+# DATABASE CONNECTION FUNCTION
+# ---------------------------
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.environ.get("DB_HOST"),
+        user=os.environ.get("DB_USER"),
+        password=os.environ.get("DB_PASSWORD"),
+        database=os.environ.get("DB_NAME")
+    )
 
-# ---------- HOME ----------
+# ---------------------------
+# HOME
+# ---------------------------
 @app.route('/')
 def home():
-    return '''
-    <h2>Login</h2>
-    <form method="post" action="/login">
-        Username: <input name="username"><br><br>
-        Password: <input type="password" name="password"><br><br>
-        <button>Login</button>
-    </form>
-    <br>
-    <a href="/register">Register</a>
-    '''
+    return render_template("index.html")
 
-# ---------- REGISTER ----------
-@app.route('/register', methods=['GET','POST'])
+# ---------------------------
+# REGISTER
+# ---------------------------
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = generate_password_hash(request.form['password'])
+    username = request.form['username']
+    password = request.form['password']
 
-        cur = db.cursor()
-        cur.execute("SELECT * FROM users WHERE username=%s", (username,))
-        if cur.fetchone():
-            return "Username already exists!"
+    hashed_password = generate_password_hash(password)
 
-        cur.execute("INSERT INTO users (username,password,role) VALUES (%s,%s,%s)",
-                    (username,password,'student'))
-        db.commit()
-        cur.close()
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-        return redirect('/')
+    cur.execute("INSERT INTO users (username,password,role) VALUES (%s,%s,%s)",
+                (username, hashed_password, 'student'))
 
-    return '''
-    <h2>Register</h2>
-    <form method="post">
-        Username: <input name="username"><br><br>
-        Password: <input type="password" name="password"><br><br>
-        <button>Register</button>
-    </form>
-    '''
+    conn.commit()
+    cur.close()
+    conn.close()
 
-# ---------- LOGIN ----------
+    return redirect('/')
+
+# ---------------------------
+# LOGIN
+# ---------------------------
 @app.route('/login', methods=['POST'])
 def login():
     username = request.form['username']
     password = request.form['password']
 
-    cur = db.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
+
     cur.execute("SELECT * FROM users WHERE username=%s", (username,))
     user = cur.fetchone()
+
     cur.close()
+    conn.close()
 
     if user and check_password_hash(user[2], password):
-        session['username'] = user[1]
+        session['user_id'] = user[0]
         session['role'] = user[3]
 
         if user[3] == 'admin':
-            return redirect('/admin')
+            return redirect('/admin_dashboard')
         else:
-            return redirect('/student')
+            return redirect('/student_dashboard')
 
-    return "Invalid Login"
+    return "Invalid Credentials"
 
-# ---------- ADMIN ----------
-@app.route('/admin')
-def admin():
-    if session.get('role') == 'admin':
-        return '''
-        <h2>Admin Dashboard</h2>
-        <a href="/upload_pdf">Upload Question PDF</a><br><br>
-        <a href="/results">View Results</a><br><br>
-        <a href="/logout">Logout</a>
-        '''
-    return redirect('/')
+# ---------------------------
+# ADMIN DASHBOARD
+# ---------------------------
+@app.route('/admin_dashboard')
+def admin_dashboard():
+    if session.get('role') != 'admin':
+        return redirect('/')
+    return render_template("admin_dashboard.html")
 
-# ---------- PDF UPLOAD ----------
-@app.route('/upload_pdf', methods=['GET','POST'])
+# ---------------------------
+# STUDENT DASHBOARD
+# ---------------------------
+@app.route('/student_dashboard')
+def student_dashboard():
+    if session.get('role') != 'student':
+        return redirect('/')
+    return render_template("student_dashboard.html")
+
+# ---------------------------
+# UPLOAD PDF
+# ---------------------------
+@app.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
-
     if session.get('role') != 'admin':
         return redirect('/')
 
-    if request.method == 'POST':
+    file = request.files['pdf']
+    pdf_reader = PyPDF2.PdfReader(file)
 
-        file = request.files['pdf_file']
-        pdf_reader = PyPDF2.PdfReader(file)
+    text = ""
+    for page in pdf_reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
 
-        text = ""
-        for page in pdf_reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
+    lines = text.split("\n")
 
-        lines = text.split("\n")
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-        question=""
-        options=[]
-        answer_key={}
-        reading_answers=False
+    question = ""
+    options = []
+    answer_key = {}
 
-        cur = db.cursor()
+    for line in lines:
+        line = line.strip()
 
-        for line in lines:
-            line=line.strip()
+        if line.lower().startswith("answer"):
+            continue
 
-            if "Answer Key" in line:
-                reading_answers=True
-                continue
+        if line and line[0].isdigit() and "." in line:
+            if question and len(options) == 4:
+                q_no = question.split(".")[0]
+                correct = answer_key.get(q_no, "")
 
-            if reading_answers:
-                if "." in line:
-                    parts=line.split(".")
-                    answer_key[parts[0].strip()] = parts[1].strip()
-                continue
+                cur.execute("""
+                    INSERT INTO questions
+                    (question,option_a,option_b,option_c,option_d,correct_answer)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, (question, options[0], options[1], options[2], options[3], correct))
 
-            if line and line[0].isdigit() and "." in line:
+            question = line
+            options = []
 
-                if question and len(options)==4:
-                    q_no = question.split(".")[0]
-                    correct = answer_key.get(q_no,"")
+        elif line.startswith("A") or line.startswith("B") or line.startswith("C") or line.startswith("D"):
+            options.append(line)
 
-                    cur.execute("""
-                        INSERT INTO questions
-                        (question,option_a,option_b,option_c,option_d,correct_answer)
-                        VALUES (%s,%s,%s,%s,%s,%s)
-                    """,(question,options[0],options[1],options[2],options[3],correct))
+        elif ":" in line:
+            parts = line.split(":")
+            if len(parts) == 2:
+                answer_key[parts[0].strip()] = parts[1].strip()
 
-                question=line
-                options=[]
+    # Insert last question
+    if question and len(options) == 4:
+        q_no = question.split(".")[0]
+        correct = answer_key.get(q_no, "")
 
-            elif line.startswith(("A)", "B)", "C)", "D)")):
-                options.append(line[3:].strip())
+        cur.execute("""
+            INSERT INTO questions
+            (question,option_a,option_b,option_c,option_d,correct_answer)
+            VALUES (%s,%s,%s,%s,%s,%s)
+        """, (question, options[0], options[1], options[2], options[3], correct))
 
-        # 🔥 INSERT LAST QUESTION
-        if question and len(options)==4:
-            q_no = question.split(".")[0]
-            correct = answer_key.get(q_no,"")
+    conn.commit()
+    cur.close()
+    conn.close()
 
-            cur.execute("""
-                INSERT INTO questions
-                (question,option_a,option_b,option_c,option_d,correct_answer)
-                VALUES (%s,%s,%s,%s,%s,%s)
-            """,(question,options[0],options[1],options[2],options[3],correct))
+    return "PDF Uploaded Successfully"
 
-        db.commit()
-        cur.close()
-
-        return "PDF Uploaded & Questions Inserted!"
-
-    return '''
-    <h2>Upload PDF</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="pdf_file">
-        <button>Upload</button>
-    </form>
-    '''
-
-# ---------- RESULTS (ADMIN ONLY) ----------
+# ---------------------------
+# RESULTS (ADMIN ONLY)
+# ---------------------------
 @app.route('/results')
 def results():
-
     if session.get('role') != 'admin':
         return redirect('/')
 
-    cur=db.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
     cur.execute("SELECT * FROM results")
-    data=cur.fetchall()
+    data = cur.fetchall()
+
     cur.close()
+    conn.close()
 
-    html="<h2>Results</h2>"
-    for r in data:
-        html+=f"<p>{r[1]} - Score: {r[2]}</p>"
+    return render_template("results.html", data=data)
 
-    html+="<br><a href='/admin'>Back</a>"
-    return html
-
-# ---------- LOGOUT ----------
+# ---------------------------
+# LOGOUT
+# ---------------------------
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect('/')
 
+# ---------------------------
+# RENDER PORT BINDING
+# ---------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
