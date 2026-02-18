@@ -1,8 +1,8 @@
 Flask
-flask-mysqldb
 PyMySQL
 gunicorn
 PyPDF2
 cryptography
+
 
 
